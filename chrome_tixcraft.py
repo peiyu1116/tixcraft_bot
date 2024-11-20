@@ -7031,23 +7031,42 @@ def ibon_auto_ocr(driver, config_dict, ocr, away_from_keyboard_enable, previous_
 
             if not image_element is None:
                 try:
-                    driver.set_script_timeout(1)
-                    form_verifyCode_base64 = driver.execute_async_script("""
-                        var canvas = document.createElement('canvas');
-                        var context = canvas.getContext('2d');
-                        var img = document.getElementById('%s');
-                        if(img!=null) {
-                        canvas.height = img.naturalHeight;
-                        canvas.width = img.naturalWidth;
-                        context.drawImage(img, 0, 0);
-                        callback = arguments[arguments.length - 1];
-                        callback(canvas.toDataURL()); }
-                        """ % (image_id))
-                    if not form_verifyCode_base64 is None:
-                        img_base64 = base64.b64decode(form_verifyCode_base64.split(',')[1])
+                    # 使用 CSS 選擇器找到可見的驗證碼圖片
+                    image_element = driver.find_element(By.CSS_SELECTOR, "img.chk_pic:not([style*='display: none'])")
+
+                    if image_element:
+                        # 設置執行腳本超時時間
+                        driver.set_script_timeout(1)
+
+                        # JavaScript 腳本將圖片轉換為 base64
+                        form_verifyCode_base64 = driver.execute_async_script("""
+                                var canvas = document.createElement('canvas');
+                                var context = canvas.getContext('2d');
+                                var img = arguments[0];
+
+                                // 確保圖片已完全加載
+                                if (img.complete) {
+                                    canvas.height = img.naturalHeight;
+                                    canvas.width = img.naturalWidth;
+                                    context.drawImage(img, 0, 0);
+                                    arguments[arguments.length - 1](canvas.toDataURL());
+                                } else {
+                                    img.onload = function() {
+                                        canvas.height = img.naturalHeight;
+                                        canvas.width = img.naturalWidth;
+                                        context.drawImage(img, 0, 0);
+                                        arguments[arguments.length - 1](canvas.toDataURL());
+                                    };
+                                }
+                            """, image_element)
+
+                        if form_verifyCode_base64:
+                            # 解碼 base64 圖片數據
+                            img_base64 = base64.b64decode(form_verifyCode_base64.split(',')[1])
+
                 except Exception as exc:
                     if show_debug_message:
-                        print("canvas exception:", str(exc))
+                        print("擷取驗證碼圖片發生錯誤:", str(exc))
                     pass
         if not img_base64 is None:
             try:
